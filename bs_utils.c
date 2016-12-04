@@ -35,20 +35,22 @@ if_not_exist(const char *ifn)
 }
 
 int 
-bind_socket_if(int fd, const char *ifn)
+get_if_index(int fd, struct ifreq *ifr)
 {
-    struct ifreq ifr;
-
-    if (NULL == ifn) {
-        return -1;
-    }
-    memset(&ifr, 0, sizeof(ifr));
-    snprintf(ifr.ifr_name, sizeof(ifr.ifr_name), "%s", ifn);
-    if (ioctl(fd, SIOCGIFINDEX, &ifr) < 0) {
+    if (ioctl(fd, SIOCGIFINDEX, ifr) < 0) {
         printf("ioctl:%s\n", strerror(errno));
         return -1;
     }
-    if (setsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE, &ifr, sizeof(ifr)) < 0) {
+    return 0;
+}
+
+int 
+bind_socket_if(int fd, struct ifreq *ifr)
+{
+    if (get_if_index(fd, ifr) < 0) {
+        return -1;
+    } 
+    if (setsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE, ifr, sizeof(*ifr)) < 0) {
         printf("%s\n", "setsockopt");
         return -1;
     }
@@ -56,58 +58,39 @@ bind_socket_if(int fd, const char *ifn)
 }
 
 int 
-get_if_macaddr(int fd, const char *ifn, char *mac, int mac_len) 
+get_if_macaddr(int fd, struct ifreq *ifr, char *mac, int mac_len) 
 { 
-    struct ifreq ifr;
     char *ptr;    
     int i = 0;
 
-    if (mac == NULL || ifn == NULL) {
+    if (mac == NULL) {
         return -1;
     }
-    memset(&ifr, 0, sizeof(ifr));
-    strcpy(ifr.ifr_name, ifn);
-    if (ioctl(fd, SIOCGIFHWADDR, &ifr) < 0 ) {
+    if (ioctl(fd, SIOCGIFHWADDR, ifr) < 0 ) {
         perror("Dev_GetIfMacAddr, ioctl");
         return -1;
-    } else {
-       
-    }
-    memcpy(mac, ifr.ifr_hwaddr.sa_data, 6);
+    } 
+    memcpy(mac, ifr->ifr_hwaddr.sa_data, 6);
     return 0;
 } 
 
 int 
-set_if_promisc(const char *ifn, int ture)  
+set_if_promisc(int fd, struct ifreq *ifr, int ture)  
 {  
-    struct ifreq ifr;  
-    int sockfd;  
-
-    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {  
-        printf("%s", strerror(errno));
-        return -1;    
-    }  
-
-    strcpy(ifr.ifr_name, ifn);
-    if (ioctl(sockfd, SIOCGIFFLAGS, &ifr) < 0) {  
+    if (ioctl(fd, SIOCGIFFLAGS, ifr) < 0) {  
         printf("%s", strerror(errno));  
-        close(sockfd);  
         return -1;    
     }
-
     if (ture) {
-        ifr.ifr_flags |= IFF_PROMISC; 
+        ifr->ifr_flags |= IFF_PROMISC; 
     } else {
-        ifr.ifr_flags &= ~IFF_PROMISC;
+        ifr->ifr_flags &= ~IFF_PROMISC;
     }
     
-    if (ioctl(sockfd, SIOCSIFFLAGS, &ifr) < 0) {  
-        printf("%s", strerror(errno)); 
-        close(sockfd);  
+    if (ioctl(fd, SIOCSIFFLAGS, ifr) < 0) {  
+        printf("%s", strerror(errno));   
         return -1;    
     }  
-
-    close(sockfd);  
     return 0;  
 } 
 
@@ -138,7 +121,7 @@ set_nonblocking(int sd)
 }
 
 int
-nc_set_reuseaddr(int sd)
+set_reuseaddr(int sd)
 {
     int reuse;
     socklen_t len;
@@ -254,7 +237,9 @@ readn(int fd, void *vptr, size_t n)
     ptr = vptr;
     nleft = n;
     while (nleft > 0) {
+        printf("nread = %ld , errno = %d\n", nread, errno);
         if ( (nread = read(fd, ptr, nleft)) < 0) {
+            printf("nread = %ld , errno = %d\n", nread, errno);
             if (errno == EINTR)
                 nread = 0;      /* and call read() again */
             else

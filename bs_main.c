@@ -4,10 +4,56 @@
 #include "bs_utils.h"
 #include "bs_vserver.h"
 #include <getopt.h>
+#include <unistd.h>
+#include <string.h>
 
 dev_event_loop_t *BsLoop = NULL;
 dev_event_t *BsTimer = NULL;
-dev_event_t *BSVserver = NULL;
+dev_event_t *BsVserver = NULL;
+dev_event_t *BsCmd = NULL;
+
+int 
+cmd_input_hander(void *data)
+{
+    struct vbs_instance_array *intances = (struct vbs_instance_array *)data;
+    char buffer[512];
+    int idx, len;
+    char *p;
+
+    memset(buffer, 0, sizeof(buffer));
+    len = read(STDIN_FILENO, buffer, sizeof(buffer));
+    if (len <= 3) return 0;
+    buffer[len - 1] = 0;
+    if (strncmp(buffer, "get", 3) == 0) {
+        p = strtok(buffer+3, " ");
+        if (p == NULL) return 0;
+
+        idx = addr_search(intances, p);
+        if (idx < 0) {
+            printf("Can not find %s\n", p);
+        } else {
+            int state = intances->array[idx].stat;
+            printf("%-14s | arp:%-5s ping:%-5s snmp:%-5s\r", \
+                        p, 
+                        IS_RESPOND_ARP(state)?"open":"off",
+                        IS_RESPOND_PING(state)?"open":"off",
+                        IS_RESPOND_SNMP(state)?"open":"off"
+                        );
+        }
+    }
+
+    return 0;
+}
+
+
+dev_event_t * 
+bs_cmd_creat(void *data)
+{
+    dev_event_t* vs;
+    set_nonblocking(STDIN_FILENO);
+    vs = dev_event_creat(STDIN_FILENO, EPOLLIN | EPOLLHUP | EPOLLERR, cmd_input_hander, (void *)data, 0);
+    return vs;
+}
 
 
 int 
@@ -15,7 +61,7 @@ ev_loop_cb(void *data, uint32_t events)
 {
     dev_event_t *ev = (dev_event_t *)data;
     //printf("events =%d\n\n", events);
-    ev->handler(ev->data);
+    ev->handler(dev_event_get_data(ev));
     return 0;
 }
 
@@ -56,18 +102,21 @@ int main(int argc, char *argv[])
         exit(-1);
     }
 
-    struct bs_config * bsc = calloc(1, sizeof(struct bs_config));
-    snprintf(bsc->ifn, sizeof(bsc->ifn), "%s", ifn);
-    snprintf(bsc->ip_list_path, sizeof(bsc->ip_list_path), "%s", ip_list);
+    struct bs_global * bsg = calloc(1, sizeof(struct bs_global));
+    snprintf(bsg->ifn, sizeof(bsg->ifn), "%s", ifn);
+    snprintf(bsg->ip_list_path, sizeof(bsg->ip_list_path), "%s", ip_list);
 
-    BSVserver = bs_vserver_creat(bsc);
-    if (BSVserver == NULL) {
+    BsVserver = bs_vserver_creat(bsg);
+    if (BsVserver == NULL) {
         fprintf(stderr, "%s\n", "creat vserver fail");
         exit(-1);
     }
 
+    BsCmd = bs_cmd_creat(bsg->vbs_instances);
+
     dev_event_loop_add(BsLoop, BsTimer);
-    dev_event_loop_add(BsLoop, BSVserver);
+    dev_event_loop_add(BsLoop, BsVserver);
+    dev_event_loop_add(BsLoop, BsCmd);
     dev_event_loop_run(BsLoop);
     return 0;
 }

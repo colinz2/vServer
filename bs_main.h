@@ -12,5 +12,18 @@ typedef struct in_addr      IA;
 #define unlikely(x)     (x)
 #endif
 
+
+static inline void 
+swap_array(unsigned char *a, unsigned char *b, int len)
+{
+    int i;
+    for (i = 0; i < len; i++) {
+        *a = *a ^ *b;
+        *b = *a ^ *b;
+        *a = *a ^ *b;
+        a++; b++;
+    }
+}
+
 #endif
 

@@ -1,4 +1,3 @@
-#include "core/dev_event.h"
 #include "bs_utils.h"
 #include "bs_main.h"
 #include "bs_vserver.h"
@@ -12,14 +11,13 @@
 #include <sys/types.h>
 #include <netinet/ip_icmp.h>
 #include <netinet/udp.h>
-#include <netinet/tcp.h>
 #include <netinet/ip.h>
 #include <netinet/if_ether.h>
 #include <net/ethernet.h>
-#include <netpacket/packet.h>
 #include <net/if.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <netpacket/packet.h>
 
 #define BUFFER_SIZE 65535
 static unsigned char BufferRec[BUFFER_SIZE];
@@ -45,8 +43,7 @@ addr_cmp2(const void *a, const void *b)
     }
 }
 
-
-static int 
+int 
 addr_binary_search(struct vbs_instance_array *a, uint32_t ipaddr) {
     int left = 0;
     int right = a->size - 1;
@@ -63,19 +60,32 @@ addr_binary_search(struct vbs_instance_array *a, uint32_t ipaddr) {
     return -1;
 }
 
+int addr_search(struct vbs_instance_array *a, const char *ip)
+{
+    uint32_t iip = 0;
+    int ret = inet_pton(AF_INET, ip, &iip);
+    if(ret <= 0) return -1;
+    return addr_binary_search(a, iip);
+}
+
 void addr_print(struct vbs_instance_array *a)
 {
     int i;
     char ip[32] = {0};
 
-    printf("size = %d\n", a->size);
-
+    printf("Ip address number = %d\n", a->size);
     for (i = 0; i < a->size; i++) {
         inet_ntop(AF_INET, &a->array[i].ipaddr, ip, sizeof(ip));
-        printf("ip = %s , stat = %d\n", ip, a->array[i].stat);
+        int state = a->array[i].stat;
+        printf("#%d:  %-14s | arp:%-5s ping:%-5s snmp:%-5s\n", \
+                        i + 1, ip, 
+                        IS_RESPOND_ARP(state)?"open":"off",
+                        IS_RESPOND_PING(state)?"open":"off",
+                        IS_RESPOND_SNMP(state)?"open":"off"
+                        );
     }
+    printf("\n");
 }
-
 
 /* ascending order */
 static int 
@@ -133,8 +143,7 @@ uware_v4_ping_addr_del(struct vbs_instance_array *a, vbs_instance_t *i)
     return 0;
 }
 
-
-void 
+static void 
 print_hex(unsigned char *hex, int len) {
     int i;
     for (i = 0; i < len; i++) {
@@ -148,68 +157,26 @@ print_hex(unsigned char *hex, int len) {
     fflush(stdout);
 }
 
-void 
-swap_array(unsigned char *a, unsigned char *b, int len)
-{
-    int i;
-    for (i = 0; i < len; i++) {
-        *a = *a ^ *b;
-        *b = *a ^ *b;
-        *a = *a ^ *b;
-        a++; b++;
-    }
-}
-
-int 
-pack_respond(int ptype, unsigned char *rev, unsigned char *rsp, int len)
-{
-    struct ether_arp *arp;
-    struct iphdr *ip;
-    struct icmphdr *icmp;
-    struct udphdr *udp;
-    int rsp_len = 0;
-
-    if (ptype == proto_arp) {
-        arp = (struct ether_arp *)rsp;
-        rsp_len = sizeof(struct ether_arp);
-        memcpy(rsp, rev, sizeof(struct ether_arp));
-        arp->arp_op = htons(ARPOP_REPLY);
-        swap_array(arp->arp_sha, arp->arp_tha, 6);
-        swap_array(arp->arp_spa, arp->arp_tpa, 4);
-        memcpy(arp->arp_sha, "\x00\x01\x02\x03\x04\x05", 6);
-    } else if (ptype == proto_icmp) {
-        
-    } else if (ptype == proto_snmp) {
-
-    } else {
-        return 0;
-    }
-    return rsp_len;
-}
-
-
 int 
 vsever_handler(void *data)
 {
     bs_vserver_t *bs_vsrv = (bs_vserver_t *)data;
-    struct bs_config *conf = bs_vsrv->conf;
     int sock_fd = bs_vsrv->fd;
     ssize_t recv_len = 0, send_len = 0;
     int protocl_type = -1;
     const int ether_header_len = sizeof(struct ether_header);
 
-    //unsigned int addr_len = sizeof(struct sockaddr);
-    //struct sockaddr from_addr;
-    struct sockaddr_ll addr_ll;
-    unsigned int addr_len = sizeof(addr_ll);
+    struct sockaddr_ll from_addr;
+    unsigned int addr_len = sizeof(from_addr);
 
-    recv_len = recvfrom(sock_fd, BufferRec, BUFFER_SIZE, 0, (void *)&addr_ll, &addr_len);
-    //recv_len = read(sock_fd, BufferRec, BUFFER_SIZE);
+    //recv_len = recvfrom(sock_fd, BufferRec, BUFFER_SIZE, 0, (void *)&from_addr, &addr_len);
+    recv_len = read(sock_fd, BufferRec, BUFFER_SIZE);
     if (recv_len < 0) {
         fprintf(stderr, "recv :%s\n", strerror(errno));
         exit(-1);
         return 1;
     }
+
     struct ether_header *ethd = (struct ether_header *)BufferRec;
     uint16_t ether_type = ntohs(ethd->ether_type);
     struct ether_arp *arp_pack;
@@ -235,7 +202,10 @@ vsever_handler(void *data)
             target_ip = (uint32_t *)&ip_pack->daddr;
             ip_payload = ether_payload + ((int)(ip_pack->ihl)<<2);
             if (ip_pack->protocol == IPPROTO_ICMP) {
-                protocl_type = proto_icmp;
+                icmp_pack = (struct icmphdr *)ip_payload;
+                if (icmp_pack->type ==  ICMP_ECHO) {
+                    protocl_type = proto_icmp;
+                }
             } else if (ip_pack->protocol == IPPROTO_UDP) {
                 udp_pack = (struct udphdr *)ip_payload;
                 if (ntohs(udp_pack->dest) == SNMP_PORT) {
@@ -263,15 +233,20 @@ vsever_handler(void *data)
             inet_ntop(AF_INET, target_ip, ip, sizeof(ip));
             printf("target_ip = %s, stat = %d, protocl_type  = %d\n", ip, stat, protocl_type);
             if (stat & protocl_type) {
+                printf("recv\n");
                 print_hex(BufferRec, recv_len);
                 memcpy(BufferSend, BufferRec, ether_header_len);
                 send_len = pack_respond(protocl_type, ether_payload, rsp_payload, 0);
                 send_len += ether_header_len;     
                 swap_array(ethd_s->ether_dhost, ethd_s->ether_shost, 6);
-                memcpy(ethd_s->ether_shost, bs_vsrv->if_mac, 6);
+                if (ether_type == ETHERTYPE_ARP) {
+                    struct ether_arp *arp = (struct ether_arp *)rsp_payload;
+                    memcpy(ethd_s->ether_shost, arp->arp_sha, 6);
+                }
+                printf("send\n");
                 print_hex(BufferSend, send_len);
-                //writen(sock_fd, BufferSend, send_len);
-                int ret = sendto(sock_fd, BufferSend, send_len, 0, (struct sockaddr *)&addr_ll, sizeof(struct sockaddr_ll));
+                //int ret = sendto(sock_fd, BufferSend, send_len, 0, (struct sockaddr *)&from_addr, addr_len);
+                int ret = write(sock_fd, BufferSend, send_len);
                 if (ret < 0) {
                     fprintf(stderr, "sendto :%s\n", strerror(errno));
                 }
@@ -318,12 +293,11 @@ init_ip_list(struct vbs_instance_array *a, char *path)
             }
             p = strtok(NULL, "  \t");
             n++;
-        } 
-        instance_array_add(a, &vbst);  
+        }
+        if (vbst.ipaddr) instance_array_add(a, &vbst);  
     }
 
     addr_sort(a);
-
     addr_print(a);
     fclose(f);
     return 0;
@@ -344,9 +318,12 @@ vbs_instance_array_init(void)
 dev_event_t * 
 bs_vserver_creat(void *data)
 {
+    struct sockaddr_ll saddr; 
     dev_event_t* vs;
     int fd;
-    int ret;
+    struct bs_global *bsg = (struct bs_global *)data;
+    bs_vserver_t *bs_vserver = calloc(1, sizeof(bs_vserver_t));
+    struct ifreq *ifr = &bs_vserver->ifr;
 
     fd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
     if (fd < 0) {
@@ -354,26 +331,34 @@ bs_vserver_creat(void *data)
         return NULL;
     }
 
-    struct bs_config *bsc = (struct bs_config *)data;
+    strcpy(ifr->ifr_name, bsg->ifn);
+    get_if_index(fd, ifr);
+    saddr.sll_family = AF_PACKET;
+    saddr.sll_ifindex = ifr->ifr_ifindex;
+    saddr.sll_protocol = htons(ETH_P_ALL);
 
-    if (set_if_promisc(bsc->ifn, 1)  ||
-        bind_socket_if(fd, bsc->ifn) ||
-        set_blocking(fd)          ||
-/*        set_sndbuf(fd, 1024*1024*10) ||*/
-        set_rcvbuf(fd, 1024*1024*10)) {
-        fprintf(stderr, "setting error :%s\n", strerror(errno));
+    if (bind(fd, (struct sockaddr *)&saddr, sizeof(saddr)) < 0) {
+        close(fd);
+        free(bs_vserver);
         return NULL;
     }
 
-
+    if (set_if_promisc(fd, ifr, 1)   ||
+        set_blocking(fd)             ||
+        set_sndbuf(fd, 1024*1024*10) ||
+        set_rcvbuf(fd, 1024*1024*10)) {
+        fprintf(stderr, "setting error :%s\n", strerror(errno));
+        close(fd);
+        free(bs_vserver);
+        return NULL;
+    }
     //printf(" snbbuf %d \n", get_sndbuf(fd));
-
-    bs_vserver_t *bs_vserver = calloc(1, sizeof(bs_vserver_t));
+    
     bs_vserver->fd = fd;
-    bs_vserver->conf = bsc;
     bs_vserver->vbsa = vbs_instance_array_init();
-    get_if_macaddr(fd, bsc->ifn, bs_vserver->if_mac, sizeof(bs_vserver->if_mac));
-    init_ip_list(bs_vserver->vbsa, bsc->ip_list_path);
+    bsg->vbs_instances = bs_vserver->vbsa;
+    get_if_macaddr(fd, ifr, bs_vserver->if_mac, sizeof(bs_vserver->if_mac));
+    init_ip_list(bs_vserver->vbsa, bsg->ip_list_path);
 
     vs = dev_event_creat(fd, EPOLLIN | EPOLLOUT | EPOLLHUP | EPOLLERR, vsever_handler, (void *)bs_vserver, 0);
     return vs;
