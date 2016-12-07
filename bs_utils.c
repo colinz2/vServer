@@ -237,9 +237,7 @@ readn(int fd, void *vptr, size_t n)
     ptr = vptr;
     nleft = n;
     while (nleft > 0) {
-        printf("nread = %ld , errno = %d\n", nread, errno);
         if ( (nread = read(fd, ptr, nleft)) < 0) {
-            printf("nread = %ld , errno = %d\n", nread, errno);
             if (errno == EINTR)
                 nread = 0;      /* and call read() again */
             else
