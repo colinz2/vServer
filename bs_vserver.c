@@ -79,9 +79,9 @@ void addr_print(struct vbs_instance_array *a)
         int state = a->array[i].stat;
         printf("#%d:  %-14s | arp:%-5s ping:%-5s snmp:%-5s\n", \
                         i + 1, ip, 
-                        IS_RESPOND_ARP(state)?"open":"off",
-                        IS_RESPOND_PING(state)?"open":"off",
-                        IS_RESPOND_SNMP(state)?"open":"off"
+                        IS_RESPOND_ARP(state)?"on":"off",
+                        IS_RESPOND_PING(state)?"on":"off",
+                        IS_RESPOND_SNMP(state)?"on":"off"
                         );
     }
     printf("\n");
@@ -157,6 +157,13 @@ print_hex(unsigned char *hex, int len) {
     fflush(stdout);
 }
 
+void 
+bs_vserver_config(char *data)
+{
+    printf("data:%s\n", data);
+}
+
+
 int 
 vsever_handler(void *data)
 {
@@ -171,7 +178,7 @@ vsever_handler(void *data)
 
     //recv_len = recvfrom(sock_fd, BufferRec, BUFFER_SIZE, 0, (void *)&from_addr, &addr_len);
     recv_len = read(sock_fd, BufferRec, BUFFER_SIZE);
-    if (recv_len < 0) {
+    if (unlikely(recv_len < 0)) {
         fprintf(stderr, "recv :%s\n", strerror(errno));
         exit(-1);
         return 1;
@@ -186,6 +193,7 @@ vsever_handler(void *data)
     uint32_t *target_ip = NULL;
     unsigned char *ether_payload = NULL;
     unsigned char *ip_payload = NULL;
+    uint16_t target_port;
 
     ether_payload = BufferRec + ether_header_len;
 
@@ -208,9 +216,12 @@ vsever_handler(void *data)
                 }
             } else if (ip_pack->protocol == IPPROTO_UDP) {
                 udp_pack = (struct udphdr *)ip_payload;
-                if (ntohs(udp_pack->dest) == SNMP_PORT) {
+                target_port = ntohs(udp_pack->dest);
+                if (target_port == SNMP_PORT) {
                     protocl_type = proto_snmp;
                     //printf("ntohs(udp_pack->dest) = %d \n", ntohs(udp_pack->dest));
+                } else if (target_port == CONFIG_PORT) {
+                    bs_vserver_config(ip_payload + sizeof(struct udphdr));
                 }
             } else {
                 protocl_type = -1;

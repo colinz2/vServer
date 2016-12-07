@@ -20,6 +20,9 @@ cmd_input_hander(void *data)
     int idx, len;
     char *p;
 
+    printf("%s\n", );
+    fflush(stdout);
+
     memset(buffer, 0, sizeof(buffer));
     len = read(STDIN_FILENO, buffer, sizeof(buffer));
     if (len <= 3) return 0;
@@ -35,13 +38,14 @@ cmd_input_hander(void *data)
             int state = intances->array[idx].stat;
             printf("%-14s | arp:%-5s ping:%-5s snmp:%-5s\r", \
                         p, 
-                        IS_RESPOND_ARP(state)?"open":"off",
-                        IS_RESPOND_PING(state)?"open":"off",
-                        IS_RESPOND_SNMP(state)?"open":"off"
+                        IS_RESPOND_ARP(state)?"on":"off",
+                        IS_RESPOND_PING(state)?"on":"off",
+                        IS_RESPOND_SNMP(state)?"on":"off"
                         );
         }
     }
 
+    fflush(stdout);
     return 0;
 }
 
@@ -116,7 +120,7 @@ int main(int argc, char *argv[])
 
     dev_event_loop_add(BsLoop, BsTimer);
     dev_event_loop_add(BsLoop, BsVserver);
-    dev_event_loop_add(BsLoop, BsCmd);
+    //dev_event_loop_add(BsLoop, BsCmd);
     dev_event_loop_run(BsLoop);
     return 0;
 }

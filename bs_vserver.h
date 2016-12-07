@@ -7,6 +7,7 @@
 #include "bs_packet.h"
 
 #define SNMP_PORT 161
+#define CONFIG_PORT 9919
 
 #define IS_RESPOND_ARP(state) (state & VBS_RESPOND_ARP)
 #define IS_RESPOND_PING(state) (state & VBS_RESPOND_PING)
