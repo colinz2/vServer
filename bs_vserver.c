@@ -1,6 +1,7 @@
 #include "bs_utils.h"
 #include "bs_main.h"
 #include "bs_vserver.h"
+#include "bs_log.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -29,14 +30,18 @@ static unsigned char BufferSend[BUFFER_SIZE];
             fflush(stderr); \
         } while (0)
 
+
 static int 
 addr_cmp2(const void *a, const void *b)
 {
     vbs_instance_t *aa = (vbs_instance_t *)a;
     vbs_instance_t *bb = (vbs_instance_t *)b;
-    if (aa->ipaddr > bb->ipaddr) {
+
+    uint32_t A = ntohl(aa->ipaddr);
+    uint32_t B = ntohl(bb->ipaddr);
+    if (A > B) {
         return 1;
-    } else if (aa->ipaddr ==  bb->ipaddr) {
+    } else if (A ==  B) {
         return 0;
     } else {
         return -1;
@@ -49,9 +54,9 @@ addr_binary_search(struct vbs_instance_array *a, uint32_t ipaddr) {
     int right = a->size - 1;
     while (left <= right) {
         int mid = left + ((right - left) >> 1);
-        if (a->array[mid].ipaddr == ipaddr) {
+        if (ntohl(a->array[mid].ipaddr) == ntohl(ipaddr)) {
             return mid;
-        } else if (a->array[mid].ipaddr > ipaddr) {
+        } else if (ntohl(a->array[mid].ipaddr) > ntohl(ipaddr)) {
             right = mid - 1;
         }  else {
             left = mid + 1;
@@ -64,7 +69,10 @@ int addr_search(struct vbs_instance_array *a, const char *ip)
 {
     uint32_t iip = 0;
     int ret = inet_pton(AF_INET, ip, &iip);
-    if(ret <= 0) return -1;
+    if(ret <= 0) {
+        fprintf(stderr, "inet_pton :%s\n", strerror(errno));
+        return -1;
+    }
     return addr_binary_search(a, iip);
 }
 
@@ -72,19 +80,21 @@ void addr_print(struct vbs_instance_array *a)
 {
     int i;
     char ip[32] = {0};
+    vbs_instance_t *vbs_inst;
 
-    printf("Ip address number = %d\n", a->size);
+    console_print("\033[2J\033[0;0H""Ip address number = %d \n", a->size);
     for (i = 0; i < a->size; i++) {
-        inet_ntop(AF_INET, &a->array[i].ipaddr, ip, sizeof(ip));
-        int state = a->array[i].stat;
-        printf("#%d:  %-14s | arp:%-5s ping:%-5s snmp:%-5s\n", \
+        vbs_inst = &a->array[i];
+        int state = vbs_inst->stat;
+        inet_ntop(AF_INET, &vbs_inst->ipaddr, ip, sizeof(ip));
+        console_print("#%-4d:  %-16s | arp:(%d)%-5s ping:(%d)%-5s snmp:(%d)%-5s\n", \
                         i + 1, ip, 
-                        IS_RESPOND_ARP(state)?"on":"off",
-                        IS_RESPOND_PING(state)?"on":"off",
-                        IS_RESPOND_SNMP(state)?"on":"off"
+                        vbs_inst->arp_count, IS_RESPOND_ARP(state)?"on":"off",
+                        vbs_inst->ping_count, IS_RESPOND_PING(state)?"on":"off",
+                        vbs_inst->snmp_count, IS_RESPOND_SNMP(state)?"on":"off"
                         );
     }
-    printf("\n");
+    console_print("\n");
 }
 
 /* ascending order */
@@ -111,7 +121,7 @@ instance_array_double(struct vbs_instance_array *a)
 }
 
 int 
-instance_array_add(struct vbs_instance_array *a, vbs_instance_t *i)
+addr_add(struct vbs_instance_array *a, vbs_instance_t *i)
 {
     int index = 0;
     if (a->size >= a->max) {
@@ -130,7 +140,7 @@ instance_array_add(struct vbs_instance_array *a, vbs_instance_t *i)
 }
 
 int 
-uware_v4_ping_addr_del(struct vbs_instance_array *a, vbs_instance_t *i)
+addr_del(struct vbs_instance_array *a, vbs_instance_t *i)
 {
     int index = 0;
     index = addr_binary_search(a, i->ipaddr);
@@ -147,18 +157,34 @@ static void
 print_hex(unsigned char *hex, int len) {
     int i;
     for (i = 0; i < len; i++) {
-        if (i%64 == 0 && i) {
+        if (i%32 == 0 && i) {
             printf("\n");
         }
         printf("%02hhx ", hex[i]);
  
     }
     printf("\n");
-    fflush(stdout);
+}
+
+static void 
+log_hex(unsigned char *hex, int len) 
+{
+    int i;
+    char buf[512] = {0};
+    int wlen = 0;
+    for (i = 0; i < len; i++) {
+        if (i%32 == 0 && i) {
+            log_print("%s\n", buf);
+            memset(buf, 0, sizeof(buf));
+            wlen = 0;
+        }
+        wlen += snprintf(buf+wlen, sizeof(buf), "%02hhx ", hex[i]);
+    }
+    log_print("%s\n", buf);
 }
 
 void 
-bs_vserver_config(char *data)
+bs_vserver_config(unsigned char *data)
 {
     printf("data:%s\n", data);
 }
@@ -240,22 +266,29 @@ vsever_handler(void *data)
         unsigned char *rsp_payload = BufferSend + ether_header_len;
 
         if ((idx = addr_binary_search(bs_vsrv->vbsa, tip)) >= 0) {
-            uint32_t stat = bs_vsrv->vbsa->array[idx].stat;
+            vbs_instance_t * vbs_inst = &bs_vsrv->vbsa->array[idx];
+
             inet_ntop(AF_INET, target_ip, ip, sizeof(ip));
-            printf("target_ip = %s, stat = %d, protocl_type  = %d\n", ip, stat, protocl_type);
-            if (stat & protocl_type) {
-                printf("recv\n");
-                print_hex(BufferRec, recv_len);
+            log_print("target_ip = %s, stat = %d, protocl_type  = %d\n", ip, vbs_inst->stat, protocl_type);
+            if (vbs_inst->stat & protocl_type) {
+                log_print("recv\n");
+                log_hex(BufferRec, recv_len);
                 memcpy(BufferSend, BufferRec, ether_header_len);
-                send_len = pack_respond(protocl_type, ether_payload, rsp_payload, 0);
-                send_len += ether_header_len;     
                 swap_array(ethd_s->ether_dhost, ethd_s->ether_shost, 6);
-                if (ether_type == ETHERTYPE_ARP) {
+                send_len += ether_header_len;     
+                if (vbs_inst->stat & proto_arp) {
                     struct ether_arp *arp = (struct ether_arp *)rsp_payload;
+                    send_len += pack_respond_arp(ether_payload, rsp_payload, 0);
                     memcpy(ethd_s->ether_shost, arp->arp_sha, 6);
+                    vbs_inst->arp_count++;
+                } else if (vbs_inst->stat & proto_icmp) {
+                    send_len += pack_respond_icmp(ether_payload, rsp_payload, 0);
+                    vbs_inst->ping_count++;
                 }
-                printf("send\n");
-                print_hex(BufferSend, send_len);
+                log_print("send\n");
+                log_hex(BufferSend, send_len);
+                log_print("\n");
+                
                 //int ret = sendto(sock_fd, BufferSend, send_len, 0, (struct sockaddr *)&from_addr, addr_len);
                 int ret = write(sock_fd, BufferSend, send_len);
                 if (ret < 0) {
@@ -282,7 +315,10 @@ init_ip_list(struct vbs_instance_array *a, char *path)
 
     f = fopen(path, "r");
     if (f == NULL) {
-        fprintf(stderr, "list file can not open %s\n", path);
+        f = fopen(path, "w");
+        if (f == NULL) {
+            fprintf(stderr, "can not creat %s\n", path);
+        }
         return -1;
     }
 
@@ -305,7 +341,7 @@ init_ip_list(struct vbs_instance_array *a, char *path)
             p = strtok(NULL, "  \t");
             n++;
         }
-        if (vbst.ipaddr) instance_array_add(a, &vbst);  
+        if (vbst.ipaddr) addr_add(a, &vbst);  
     }
 
     addr_sort(a);
@@ -326,6 +362,18 @@ vbs_instance_array_init(void)
     return vbs_array;
 }
 
+int
+save_ifn(const char *ifn) 
+{
+    FILE *f = fopen("/tmp/back_server_ifn_", "w");
+    if (f == NULL) {
+        return -1;
+    }
+    fprintf(f, "%s\n", ifn);
+    fclose(f);
+    return 0;
+}
+
 dev_event_t * 
 bs_vserver_creat(void *data)
 {
@@ -343,6 +391,7 @@ bs_vserver_creat(void *data)
     }
 
     strcpy(ifr->ifr_name, bsg->ifn);
+    save_ifn(bsg->ifn);
     get_if_index(fd, ifr);
     saddr.sll_family = AF_PACKET;
     saddr.sll_ifindex = ifr->ifr_ifindex;
@@ -371,6 +420,6 @@ bs_vserver_creat(void *data)
     get_if_macaddr(fd, ifr, bs_vserver->if_mac, sizeof(bs_vserver->if_mac));
     init_ip_list(bs_vserver->vbsa, bsg->ip_list_path);
 
-    vs = dev_event_creat(fd, EPOLLIN | EPOLLOUT | EPOLLHUP | EPOLLERR, vsever_handler, (void *)bs_vserver, 0);
+    vs = dev_event_creat(fd, EPOLLIN, vsever_handler, (void *)bs_vserver, 0);
     return vs;
 }

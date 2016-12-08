@@ -1,6 +1,8 @@
 #ifndef _BS_MAIN_
 #define _BS_MAIN_
 
+#include <stdio.h>
+
 typedef struct sockaddr_in  SA;
 typedef struct in_addr      IA;
 
@@ -24,6 +26,15 @@ swap_array(unsigned char *a, unsigned char *b, int len)
         a++; b++;
     }
 }
+
+#define console_print(fmt, args...) \
+        do { \
+            fprintf(stdout, fmt"", ##args); \
+            fflush(stdout); \
+        } while (0)
+
+#define CONSOLE_CLEAR       "\033[2J\033[0;0H"
+#define CONSOLE_BACK_N(n)   "\033["#n"A"
 
 #endif
 

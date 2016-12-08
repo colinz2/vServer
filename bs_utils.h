@@ -16,6 +16,7 @@ int set_sndbuf(int sd, int size);
 int set_rcvbuf(int sd, int size);
 int get_sndbuf(int sd);
 int get_rcvbuf(int sd);
+int get_io_buff_len(int fd);
 
 ssize_t                     /* Write "n" bytes to a descriptor. */
 writen(int fd, const void *vptr, size_t n);
@@ -23,5 +24,7 @@ ssize_t                     /* Read "n" bytes from a descriptor. */
 readn(int fd, void *vptr, size_t n);
 ssize_t                     /* Read "n" bytes from a descriptor. */
 reads(int fd, void *vptr, size_t n);
+
+int lock_file_init(const char *daemon_name);
 
 #endif

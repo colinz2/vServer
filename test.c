@@ -1,27 +1,75 @@
 #include <stdio.h>
 
 
-void 
-swap_array(char *a, char *b, int len)
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <pthread.h>
+#include <netinet/in.h>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include <stdlib.h>
+
+
+int main(int argc, char **argv)
 {
-    int i;
-    for (i = 0; i < len; i++) {
-        *a = *a ^ *b;
-        *b = *a ^ *b;
-        *a = *a ^ *b;
-        a++;
-        b++;
-    }      
-}
+    if (argc != 3)
+    {
+        printf("Usage: %s ip port", argv[0]);
+        exit(1);
+    }
+    printf("This is a UDP client\n");
+    struct sockaddr_in addr;
+    int sock;
 
+    if ( (sock=socket(AF_INET, SOCK_DGRAM, 0)) <0)
+    {
+        perror("socket");
+        exit(1);
+    }
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(atoi(argv[2]));
+    addr.sin_addr.s_addr = inet_addr(argv[1]);
+    if (addr.sin_addr.s_addr == INADDR_NONE)
+    {
+        printf("Incorrect ip address!");
+        close(sock);
+        exit(1);
+    }
 
-int main(int argc, char const *argv[])
-{
-    char a[16] = {"abc"};
-    char b[16] = {"123"};
-
-    swap_array(a, b, 4);
-    printf("%s\n", a);
-    printf("%s\n", b);
+    char buff[512];
+    int len = sizeof(addr);
+    while (1)
+    {
+        gets(buff);
+        int n;
+        n = sendto(sock, buff, strlen(buff), 0, (struct sockaddr *)&addr, sizeof(addr));
+        if (n < 0)
+        {
+            perror("sendto");
+            close(sock);
+            break;
+        }
+        n = recvfrom(sock, buff, 512, 0, (struct sockaddr *)&addr, &len);
+        if (n>0)
+        {
+            buff[n] = 0;
+            printf("received:");
+            puts(buff);
+        }
+        else if (n==0)
+        {
+            printf("server closed\n");
+            close(sock);
+            break;
+        }
+        else if (n == -1)
+        {
+            perror("recvfrom");
+            close(sock);
+            break;
+        }
+    }
+    
     return 0;
 }

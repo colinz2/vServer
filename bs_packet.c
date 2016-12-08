@@ -87,33 +87,38 @@ packet_ping_reply(struct icmphdr *icmp, int icmp_date_len)
 }
 
 int 
-pack_respond(int ptype, unsigned char *rev, unsigned char *rsp, int uplen_)
+pack_respond_arp(unsigned char *rev, unsigned char *rsp, int uplen_)
 {
-    struct ether_arp *arp, *arp_ack;
+    struct ether_arp *arp, *arp_ack; 
+    arp = (struct ether_arp *)rev;
+    arp_ack = (struct ether_arp *)rsp;
+    return packet_arp_reply(arp, arp_ack);
+}
+
+int 
+pack_respond_icmp(unsigned char *rev, unsigned char *rsp, int uplen_)
+{
     struct iphdr *ip, *ip_ack;
     struct icmphdr *icmp, *icmp_ack;
+    int len = 0;
+
+    ip = (struct iphdr *)rev;
+    ip_ack = (struct iphdr *)rsp;        
+    icmp = (struct icmphdr *) (rev + sizeof(struct iphdr));
+    icmp_ack = (struct icmphdr *) (rsp + sizeof(struct iphdr));
+
+    int icmp_date_len = ntohs(ip->tot_len) - sizeof(struct iphdr) - sizeof(struct icmphdr);
+    memcpy((char *)icmp_ack, (char *)icmp, icmp_date_len + sizeof(struct icmphdr));
+    len = packet_ping_reply(icmp_ack, icmp_date_len);
+    return packet_ip(ip_ack, len, IPPROTO_ICMP, ip->id, ip->daddr, ip->saddr);
+}
+
+int 
+pack_respond_snmp(unsigned char *rev, unsigned char *rsp, int uplen_)
+{
+
+    struct iphdr *ip, *ip_ack;
     struct udphdr *udp, *udp_ack;
     int rsp_len = 0, len = 0;
-
-    if (ptype == proto_arp) {
-        arp = (struct ether_arp *)rev;
-        arp_ack = (struct ether_arp *)rsp;
-        return packet_arp_reply(arp, arp_ack);
-    } else if (ptype == proto_icmp) {
-        ip = (struct iphdr *)rev;
-        ip_ack = (struct iphdr *)rsp;        
-        icmp = (struct icmphdr *) (rev + sizeof(struct iphdr));
-        icmp_ack = (struct icmphdr *) (rsp + sizeof(struct iphdr));
-
-        int icmp_date_len = ntohs(ip->tot_len) - sizeof(struct iphdr) - sizeof(struct icmphdr);
-        memcpy((char *)icmp_ack, (char *)icmp, icmp_date_len + sizeof(struct icmphdr));
-        len = packet_ping_reply(icmp_ack, icmp_date_len);
-        return packet_ip(ip_ack, len, IPPROTO_ICMP, ip->id, ip->daddr, ip->saddr);
-        
-    } else if (ptype == proto_snmp) {
-
-    } else {
-        return 0;
-    }
     return rsp_len;
 }

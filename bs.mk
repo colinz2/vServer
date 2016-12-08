@@ -10,6 +10,7 @@ PRJ_SRC = 	\
 	core/dev_heap.c \
 	core/dev_event.c \
 	core/dev_event_timer.c \
+	bs_log.c \
 	bs_utils.c \
 	bs_packet.c \
 	bs_vserver.c \

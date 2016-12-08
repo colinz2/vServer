@@ -22,12 +22,11 @@ enum proto_type
     proto_snmp = VBS_RESPOND_SNMP,
 };
 
+int
+pack_respond_arp(unsigned char *rev, unsigned char *rsp, int uplen_);
 int 
-packet_arp_reply(struct ether_arp *arp, struct ether_arp *arp_ack);
-
-
-
+pack_respond_icmp(unsigned char *rev, unsigned char *rsp, int uplen_);
 int 
-pack_respond(int ptype, unsigned char *rev, unsigned char *rsp, int len);
+pack_respond_snmp(unsigned char *rev, unsigned char *rsp, int uplen_);
 
 #endif

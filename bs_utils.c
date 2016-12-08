@@ -4,11 +4,14 @@
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
 #include <sys/types.h>
+#include <sys/file.h>
 #include <ifaddrs.h>
+#include <dirent.h>
 
 int 
 if_not_exist(const char *ifn)
@@ -118,6 +121,14 @@ set_nonblocking(int sd)
     }
 
     return fcntl(sd, F_SETFL, flags | O_NONBLOCK);
+}
+
+int 
+get_io_buff_len(int fd)
+{
+    int len = 0;
+    ioctl(fd, FIONREAD, &len);
+    return len;
 }
 
 int
@@ -271,4 +282,102 @@ reads(int fd, void *vptr, size_t n)
     }
     while ((n - nleft) && (errno == EINTR || errno == EAGAIN ));
     return(n - nleft);      /* return >= 0 */
+}
+
+static char *
+get_process_name(void)
+{
+    static char process_name[32];
+    char buf[256] = {0};
+    char *p;
+    int r = readlink("/proc/self/exe", buf, sizeof(buf));
+    if (r == -1) {
+        perror("readlink");
+        return NULL;
+    }
+    p = strrchr(buf, '/');
+    if (p) {
+        snprintf(process_name, sizeof(process_name), "%s", p + 1);
+        return process_name;
+    } else {
+        return NULL;
+    }
+}
+
+int
+check_pid(const char *daemon_name) 
+{
+    int pid = 0;
+    char path[256] = {0};
+
+    snprintf(path, sizeof(path), "/tmp/pid__%s.pid", daemon_name);
+    FILE *f = fopen(path, "r");
+    if (f == NULL)
+        return 0;
+    int n = fscanf(f, "%d", &pid);
+    fclose(f);
+
+    if (n !=1 || pid == 0 || pid == getpid()) {
+        return 0;
+    }
+
+    if (kill(pid, 0) && errno == ESRCH)
+        return 0;
+
+    return pid;
+}
+
+static int
+pid_output(const char *daemon_name) 
+{
+    FILE *f;
+    int pid = 0;
+    char path[256] = {0};
+    snprintf(path, sizeof(path), "/tmp/pid__%s.pid", daemon_name);
+    int fd = open(path, O_RDWR|O_CREAT, 0644);
+    if (fd == -1) {
+        fprintf(stderr, "can't create %s.\n", path);
+        return 0;
+    }
+    f = fdopen(fd, "r+");
+    if (f == NULL) {
+        fprintf(stderr, "can't open %s.\n", path);
+        return 0;
+    }
+
+    if (flock(fd, LOCK_EX | LOCK_NB) == -1) {
+        int n = fscanf(f, "%d", &pid);
+        fclose(f);
+        if (n != 1) {
+            fprintf(stderr, "can't lock and read path.\n");
+        } else {
+            fprintf(stderr, "can't lock path, lock is held by pid %d.\n", pid);
+        }
+        return 0;
+    }
+
+    pid = getpid();
+    if (!fprintf(f,"%d\n", pid)) {
+        fprintf(stderr, "can't write pid.\n");
+        close(fd);
+        return 0;
+    }
+    fflush(f);
+
+    return pid;
+}
+
+int
+lock_file_init(const char *daemon_name)
+{
+    int pid = check_pid(daemon_name);
+
+    if (pid) {
+        return 1;
+    }
+    pid = pid_output(daemon_name);
+    if (pid == 0) {
+        return 1;
+    }
+    return 0;
 }

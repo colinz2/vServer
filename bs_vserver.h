@@ -7,7 +7,8 @@
 #include "bs_packet.h"
 
 #define SNMP_PORT 161
-#define CONFIG_PORT 9919
+#define CONFIG_PORT 9999
+#define LOG_PATH "/tmp/back_sever_log"
 
 #define IS_RESPOND_ARP(state) (state & VBS_RESPOND_ARP)
 #define IS_RESPOND_PING(state) (state & VBS_RESPOND_PING)
@@ -17,6 +18,9 @@ typedef struct vbs_instance
 {
     uint32_t ipaddr;
     uint32_t stat;
+    uint32_t arp_count;
+    uint32_t ping_count;
+    uint32_t snmp_count;
 } vbs_instance_t;
 
 struct vbs_instance_array
@@ -46,5 +50,6 @@ dev_event_t * bs_vserver_creat(void *data);
 
 void addr_print(struct vbs_instance_array *a);
 int addr_search(struct vbs_instance_array *a, const char *ip);
-
+int addr_add(struct vbs_instance_array *a, vbs_instance_t *i);
+void addr_print(struct vbs_instance_array *a);
 #endif 
