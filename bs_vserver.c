@@ -276,12 +276,12 @@ vsever_handler(void *data)
                 memcpy(BufferSend, BufferRec, ether_header_len);
                 swap_array(ethd_s->ether_dhost, ethd_s->ether_shost, 6);
                 send_len += ether_header_len;     
-                if (vbs_inst->stat & proto_arp) {
+                if (protocl_type & proto_arp) {
                     struct ether_arp *arp = (struct ether_arp *)rsp_payload;
                     send_len += pack_respond_arp(ether_payload, rsp_payload, 0);
                     memcpy(ethd_s->ether_shost, arp->arp_sha, 6);
                     vbs_inst->arp_count++;
-                } else if (vbs_inst->stat & proto_icmp) {
+                } else if (protocl_type & proto_icmp) {
                     send_len += pack_respond_icmp(ether_payload, rsp_payload, 0);
                     vbs_inst->ping_count++;
                 }

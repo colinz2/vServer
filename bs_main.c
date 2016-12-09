@@ -181,7 +181,7 @@ bs_cmd_creat(void *data)
 {
     dev_event_t* vs;
     //set_nonblocking(STDIN_FILENO);
-    vs = dev_event_creat(STDIN_FILENO, EPOLLIN | EPOLLHUP | EPOLLERR, cmd_input_hander, (void *)data, 0);
+    vs = dev_event_creat(STDIN_FILENO, EPOLLIN, cmd_input_hander, (void *)data, 0);
     return vs;
 }
 
@@ -198,6 +198,7 @@ ev_loop_cb(void *data, uint32_t events)
 int 
 sys_init(void)
 {
+    nice(-10);
     log_open(LOG_PATH);
     return 0;
 }
