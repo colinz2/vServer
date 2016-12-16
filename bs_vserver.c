@@ -20,6 +20,8 @@
 #include <arpa/inet.h>
 #include <netpacket/packet.h>
 
+typedef int (*cmp_fun)(const void *, const void *);
+
 #define BUFFER_SIZE 65535
 static unsigned char BufferRec[BUFFER_SIZE];
 static unsigned char BufferSend[BUFFER_SIZE];
@@ -97,6 +99,41 @@ void addr_print(struct vbs_instance_array *a)
     console_print("\n");
 }
 
+static int 
+addr_insert_sort(struct vbs_instance_array *a)
+{
+    vbs_instance_t base_p;
+    int i = a->size - 1;
+
+    if (i <= 0) {
+        return 0;
+    }
+
+    memcpy(&base_p, &a->array[i], sizeof(vbs_instance_t));
+
+    while (i > 0) { 
+        if (addr_cmp2(&base_p, &a->array[i-1]) > 0) {
+            break;
+        } else {
+            memcpy(&a->array[i], &a->array[i-1], sizeof(vbs_instance_t));
+        }
+        i--;
+    }
+    memcpy(&a->array[i], &base_p, sizeof(vbs_instance_t));
+    return 0;
+}
+
+static int 
+addr_adjust(struct vbs_instance_array *a, int index)
+{
+    int i = 0;
+    for (i = index; i + 1 < a->size; i++) {
+         memcpy(&a->array[i], &a->array[i+1], sizeof(vbs_instance_t));
+    }
+    return 0;
+}
+
+
 /* ascending order */
 static int 
 addr_sort(struct vbs_instance_array *a)
@@ -135,7 +172,8 @@ addr_add(struct vbs_instance_array *a, vbs_instance_t *i)
     a->array[a->size].ipaddr = i->ipaddr;
     a->array[a->size].stat = i->stat;
     a->size++;
-    addr_sort(a);
+    addr_insert_sort(a);
+    //addr_sort(a);
     return 0;
 }
 
@@ -147,8 +185,7 @@ addr_del(struct vbs_instance_array *a, vbs_instance_t *i)
     if (index < 0) {
         return 0;
     }
-    inet_aton("255.255.255.255", (struct in_addr *)&a->array[index].ipaddr);
-    addr_sort(a);
+    addr_adjust(a, index);
     a->size--;
     return 0;
 }
@@ -345,8 +382,7 @@ init_ip_list(struct vbs_instance_array *a, char *path)
         }
         if (vbst.ipaddr) addr_add(a, &vbst);  
     }
-
-    addr_sort(a);
+    //addr_sort(a);
     addr_print(a);
     fclose(f);
     return 0;
