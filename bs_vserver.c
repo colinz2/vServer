@@ -284,6 +284,8 @@ vsever_handler(void *data)
                 } else if (protocl_type & proto_icmp) {
                     send_len += pack_respond_icmp(ether_payload, rsp_payload, 0);
                     vbs_inst->ping_count++;
+                } else {
+                    return 0;
                 }
                 log_print("send\n");
                 log_hex(BufferSend, send_len);
