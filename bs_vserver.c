@@ -299,8 +299,9 @@ vsever_handler(void *data)
         char ip[128] = {0};
         int idx = 0;
         uint32_t tip = *target_ip;
-        struct ether_header *ethd_s = (struct ether_header *)BufferSend;
-        unsigned char *rsp_payload = BufferSend + ether_header_len;
+        unsigned char *BS_ptr = (unsigned char *)BufferSend;
+        struct ether_header *ethd_s = NULL;
+        unsigned char *rsp_payload = NULL;
 
         if ((idx = addr_binary_search(bs_vsrv->vbsa, tip)) >= 0) {
             vbs_instance_t * vbs_inst = &bs_vsrv->vbsa->array[idx];
@@ -310,26 +311,39 @@ vsever_handler(void *data)
             if (vbs_inst->stat & protocl_type) {
                 log_print("recv\n");
                 log_hex(BufferRec, recv_len);
-                memcpy(BufferSend, BufferRec, ether_header_len);
-                swap_array(ethd_s->ether_dhost, ethd_s->ether_shost, 6);
-                send_len += ether_header_len;     
+
                 if (protocl_type & proto_arp) {
-                    struct ether_arp *arp = (struct ether_arp *)rsp_payload;
-                    send_len += pack_respond_arp(ether_payload, rsp_payload, 0);
-                    memcpy(ethd_s->ether_shost, arp->arp_sha, 6);
+                    rsp_payload = BS_ptr + ether_header_len;
+                    send_len = pack_respond_arp(ether_payload, rsp_payload, 0);
                     vbs_inst->arp_count++;
                 } else if (protocl_type & proto_icmp) {
-                    send_len += pack_respond_icmp(ether_payload, rsp_payload, 0);
+                    rsp_payload = BS_ptr + ether_header_len;
+                    send_len = pack_respond_icmp(ether_payload, rsp_payload, 0);
                     vbs_inst->ping_count++;
+                } else if (protocl_type & proto_snmp){
+                    rsp_payload = BS_ptr + ether_header_len;
+                    pack_respond_udp(ether_payload, rsp_payload, 0);
+                    BS_ptr += PSDH_SIZE;
+                    vbs_inst->snmp_count++;
                 } else {
                     return 0;
                 }
+
+                memcpy(BS_ptr, BufferRec, ether_header_len);
+                ethd_s = (struct ether_header *)BS_ptr;
+                swap_array(ethd_s->ether_dhost, ethd_s->ether_shost, 6);
+                if (protocl_type & proto_arp) {
+                    struct ether_arp *arp = (struct ether_arp *)rsp_payload;
+                    memcpy(ethd_s->ether_shost, arp->arp_sha, 6);
+                }
+                send_len += ether_header_len;
+
                 log_print("send\n");
-                log_hex(BufferSend, send_len);
+                log_hex(BS_ptr, send_len);
                 log_print("\n");
                 
                 //int ret = sendto(sock_fd, BufferSend, send_len, 0, (struct sockaddr *)&from_addr, addr_len);
-                int ret = write(sock_fd, BufferSend, send_len);
+                int ret = write(sock_fd, BS_ptr, send_len);
                 if (ret < 0) {
                     fprintf(stderr, "sendto :%s\n", strerror(errno));
                 }

@@ -159,7 +159,7 @@ cmd_input_hander(void *data)
         }
     } else if (strncmp(buffer, "clear", 5) == 0) {
         console_print(CONSOLE_CLEAR);
-    }  else if (strncmp(buffer, "showall", 7) == 0  || strncmp(buffer, "show", 4)) {
+    }  else if (strncmp(buffer, "showall", 7) == 0  || strncmp(buffer, "show", 4) == 0) {
         addr_print(intances);
     }
      else if (strncmp(buffer, "help", 4) == 0) {
@@ -206,17 +206,17 @@ ev_loop_cb(void *data, uint32_t events)
 
 void signal_init()
 {
-    struct sigaction act;  
-    act.sa_handler = SIG_IGN;  
-    sigemptyset(&act.sa_mask);  
+    struct sigaction act;
+    act.sa_handler = SIG_IGN;
+    sigemptyset(&act.sa_mask);
     sigaddset(&act.sa_mask, SIGQUIT);
     sigaddset(&act.sa_mask, SIGTERM);
     sigaddset(&act.sa_mask, SIGINT);
-    // act.sa_flags = SA_RESETHAND;  
-    // act.sa_flags = SA_NODEFER;  
-    act.sa_flags = 0;  
+    // act.sa_flags = SA_RESETHAND;
+    // act.sa_flags = SA_NODEFER;
+    act.sa_flags = 0;
 
-    sigaction(SIGINT, &act, 0);  
+    sigaction(SIGINT, &act, 0);
 }
 
 static int 

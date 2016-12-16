@@ -22,11 +22,26 @@ enum proto_type
     proto_snmp = VBS_RESPOND_SNMP,
 };
 
+#define ETHERNET_H_SIZE        14
+#define IP_H_SIZE              20
+#define ICMP_H_SIZE             8
+#define UDP_H_SIZE              8
+#define PSDH_SIZE              12
+
+struct pseudo_header
+{
+    int32_t source_ip;
+    int32_t dest_ip;
+    int8_t zero;
+    int8_t protocol;
+    int16_t seg_len;
+} __attribute__((__packed__));
+
 int
 pack_respond_arp(unsigned char *rev, unsigned char *rsp, int uplen_);
 int 
 pack_respond_icmp(unsigned char *rev, unsigned char *rsp, int uplen_);
 int 
-pack_respond_snmp(unsigned char *rev, unsigned char *rsp, int uplen_);
+pack_respond_udp(unsigned char *rev, unsigned char *rsp, int datalen);
 
 #endif

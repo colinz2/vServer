@@ -103,7 +103,7 @@ pack_respond_icmp(unsigned char *rev, unsigned char *rsp, int uplen_)
     int len = 0;
 
     ip = (struct iphdr *)rev;
-    ip_ack = (struct iphdr *)rsp;        
+    ip_ack = (struct iphdr *)rsp;
     icmp = (struct icmphdr *) (rev + sizeof(struct iphdr));
     icmp_ack = (struct icmphdr *) (rsp + sizeof(struct iphdr));
 
@@ -113,12 +113,45 @@ pack_respond_icmp(unsigned char *rev, unsigned char *rsp, int uplen_)
     return packet_ip(ip_ack, len, IPPROTO_ICMP, ip->id, ip->daddr, ip->saddr);
 }
 
-int 
-pack_respond_snmp(unsigned char *rev, unsigned char *rsp, int uplen_)
-{
+// struct udphdr
+// {
 
+//  struct
+//  {
+//    u_int16_t source;
+//    u_int16_t dest;
+//    u_int16_t len;
+//    u_int16_t check;
+//  };
+// };
+int 
+pack_respond_udp(unsigned char *rev, unsigned char *rsp, int datalen)
+{
     struct iphdr *ip, *ip_ack;
     struct udphdr *udp, *udp_ack;
-    int rsp_len = 0, len = 0;
-    return rsp_len;
+    struct pseudo_header *udp_p_header;
+
+    int len = sizeof(struct udphdr) + datalen;
+
+    ip = (struct iphdr *)rev;
+    udp = (struct udphdr *) (rev + sizeof(struct iphdr));
+    ip_ack = (struct iphdr *)rsp;
+    udp_p_header = (struct pseudo_header *) (rsp + sizeof(struct iphdr));
+    udp_ack = (struct udphdr *) (rsp + sizeof(struct iphdr) + sizeof(struct pseudo_header));
+
+    udp_ack->len = htons(datalen + sizeof(struct udphdr));
+    udp_ack->source = udp->dest;   //hehe
+    udp_ack->dest = udp->source;
+    udp_ack->check = 0;
+
+    udp_p_header->source_ip = ip->daddr;
+    udp_p_header->dest_ip = ip->saddr;
+    udp_p_header->zero = 0;
+    udp_p_header->protocol = IPPROTO_UDP;
+    udp_p_header->seg_len = htons(datalen + sizeof(struct udphdr));
+
+    udp_ack->check = in_cksum((unsigned short *)udp_p_header, sizeof(struct pseudo_header) + len);
+
+    ip_ack = (struct iphdr *) (rsp + sizeof(struct pseudo_header));
+    return  packet_ip(ip_ack, len, IPPROTO_UDP, ip->id, ip->daddr, ip->saddr);
 }
