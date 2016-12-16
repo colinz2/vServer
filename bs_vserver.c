@@ -84,7 +84,7 @@ void addr_print(struct vbs_instance_array *a)
     char ip[32] = {0};
     vbs_instance_t *vbs_inst;
 
-    console_print("\033[2J\033[0;0H""Ip address number = %d \n", a->size);
+    console_print(CONSOLE_CLEAR"Ip address number = %d \n", a->size);
     for (i = 0; i < a->size; i++) {
         vbs_inst = &a->array[i];
         int state = vbs_inst->stat;
@@ -400,6 +400,13 @@ vbs_instance_array_init(void)
     return vbs_array;
 }
 
+void
+vbs_instance_array_free(struct vbs_instance_array * vbs_array)
+{
+    free(vbs_array->array);
+    free(vbs_array);
+}
+
 int
 save_ifn(const char *ifn) 
 {
@@ -454,10 +461,25 @@ bs_vserver_creat(void *data)
     
     bs_vserver->fd = fd;
     bs_vserver->vbsa = vbs_instance_array_init();
+    bs_vserver->data = data;
     bsg->vbs_instances = bs_vserver->vbsa;
     get_if_macaddr(fd, ifr, bs_vserver->if_mac, sizeof(bs_vserver->if_mac));
     init_ip_list(bs_vserver->vbsa, bsg->ip_list_path);
 
     vs = dev_event_creat(fd, EPOLLIN, vsever_handler, (void *)bs_vserver, 0);
     return vs;
+}
+
+
+void
+bs_vserver_free(dev_event_t *ev)
+{
+    if (ev) {
+         bs_vserver_t *bsv = dev_event_get_data(ev);
+         if (bsv->fd > 0) close(bsv->fd);
+         vbs_instance_array_free(bsv->vbsa);
+         dev_event_destory(ev);
+         if (bsv->data) free(bsv->data);
+    }
+   
 }

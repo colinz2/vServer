@@ -208,6 +208,27 @@ dev_event_timer_creat(int num, void *data)
     return ev_ptr;
 }
 
+int 
+dev_event_timer_destory(dev_event_t *ptr)
+{
+    void * data = (void *)dev_event_get_data(ptr);
+    DEV_DECL_PRIV(ptr, priv);
+    DEV_DECL_FD(ptr, fd);
+
+    dev_heap_t * tm_heap = priv->tm_heap;
+
+    if (tm_heap) {
+        dev_heap_destory(tm_heap);
+    }
+
+    if (fd > 0) {
+        close(fd);
+    }
+    dev_event_destory(ptr);
+    return 0;
+}
+
+
 int
 dev_event_timer_add(dev_event_t *ev, dev_timer_ev_t *tm)
 {

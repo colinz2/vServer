@@ -32,6 +32,9 @@ typedef struct _dev_ev_loop
 } dev_event_loop_t;
 
 dev_event_loop_t *dev_event_loop_creat(int max_event, loop_cb_t cb);
+void dev_event_loop_destory(dev_event_loop_t * loop);
+
+
 static inline void* dev_event_get_priv(dev_event_t *event_ptr)
 {
     return event_ptr->priv;
@@ -50,6 +53,7 @@ int dev_event_loop_add(dev_event_loop_t* loop, dev_event_t *event_ptr);
 int dev_event_loop_remove(dev_event_loop_t* loop, dev_event_t *event_ptr);
 
 dev_event_t* dev_event_creat(int fd, uint32_t events, handler_t handler, void *data, int priv_len);
+void dev_event_destory(dev_event_t* ev);
 
 #define DEV_DECL_PRIV(event_ptr, priv) priv_data_t* priv = (priv_data_t*)(dev_event_get_priv(event_ptr))
 #define DEV_DECL_FD(event_ptr, fd)   int fd = (int)(dev_event_get_fd(event_ptr))

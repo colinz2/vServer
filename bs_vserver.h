@@ -43,9 +43,11 @@ typedef struct _bs_vserver
     struct ifreq ifr;
     char if_mac[16];
     struct vbs_instance_array *vbsa;  //virtual back server array
+    void *data;
 } bs_vserver_t;
 
 dev_event_t * bs_vserver_creat(void *data);
+void bs_vserver_free(dev_event_t *ev);
 
 
 void addr_print(struct vbs_instance_array *a);

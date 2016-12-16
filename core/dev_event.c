@@ -21,6 +21,14 @@ dev_event_creat(int fd, uint32_t events, handler_t handler, void *data, int priv
     return ev;
 }
 
+void 
+dev_event_destory(dev_event_t* ev)
+{
+    if (ev != NULL) {
+        free(ev);
+    }
+}
+
 dev_event_loop_t * 
 dev_event_loop_creat(int max_event, loop_cb_t cb) 
 {
@@ -41,6 +49,18 @@ dev_event_loop_creat(int max_event, loop_cb_t cb)
     }
     loop->cb = cb;
     return loop;
+}
+
+void
+dev_event_loop_destory(dev_event_loop_t * loop) 
+{
+    if (loop) {
+        if (loop->ep_fd > 0) {
+            close(loop->ep_fd);
+        }
+    }
+    free(loop->ep_events);
+    free(loop);
 }
 
 int 

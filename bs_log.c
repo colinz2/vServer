@@ -7,9 +7,11 @@
 
 static FILE *log_file = NULL;
 void 
-log_open(const char *log_path)
+log_open(const char *log_path, int flag)
 {
-    log_file = fopen(log_path, "w");
+    if (flag == 1) {
+        log_file = fopen(log_path, "w");
+    }
 }
 
 void

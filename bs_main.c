@@ -10,12 +10,17 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <arpa/inet.h>
+#include <signal.h>
 
 
 dev_event_loop_t *BsLoop = NULL;
 dev_event_t *BsTimer = NULL;
 dev_event_t *BsVserver = NULL;
 dev_event_t *BsCmd = NULL;
+
+static int log_flag = 0;
+
+static void sys_quit(void);
 
 static char *
 skip_space(const char *p)
@@ -154,7 +159,7 @@ cmd_input_hander(void *data)
         }
     } else if (strncmp(buffer, "clear", 5) == 0) {
         console_print(CONSOLE_CLEAR);
-    }  else if (strncmp(buffer, "showall", 7) == 0) {
+    }  else if (strncmp(buffer, "showall", 7) == 0  || strncmp(buffer, "show", 4)) {
         addr_print(intances);
     }
      else if (strncmp(buffer, "help", 4) == 0) {
@@ -168,7 +173,7 @@ cmd_input_hander(void *data)
     }  else if (strncmp(buffer, "exit", 4) == 0) {
         exit(0);
     } else if (strncmp(buffer, "quit", 4) == 0) {
-        exit(0);
+        sys_quit();
     } else {
         console_print(CONSOLE_CLEAR);
     }
@@ -191,16 +196,46 @@ ev_loop_cb(void *data, uint32_t events)
 {
     dev_event_t *ev = (dev_event_t *)data;
     //printf("events =%d\n\n", events);
-    ev->handler(dev_event_get_data(ev));
+    if (ev == BsTimer) {
+        ev->handler(data);
+    } else {
+        ev->handler(dev_event_get_data(ev));
+    }
     return 0;
 }
 
-int 
+void signal_init()
+{
+    struct sigaction act;  
+    act.sa_handler = SIG_IGN;  
+    sigemptyset(&act.sa_mask);  
+    sigaddset(&act.sa_mask, SIGQUIT);
+    sigaddset(&act.sa_mask, SIGTERM);
+    sigaddset(&act.sa_mask, SIGINT);
+    // act.sa_flags = SA_RESETHAND;  
+    // act.sa_flags = SA_NODEFER;  
+    act.sa_flags = 0;  
+
+    sigaction(SIGINT, &act, 0);  
+}
+
+static int 
 sys_init(void)
 {
-    nice(-10);
-    log_open(LOG_PATH);
+    signal_init();
+    nice(-19);
+    log_open(LOG_PATH, log_flag);
     return 0;
+}
+
+static void 
+sys_quit(void)
+{
+    log_close();
+    dev_event_timer_destory(BsTimer);
+    dev_event_loop_destory(BsLoop);
+    bs_vserver_free(BsVserver);
+    exit(0);
 }
 
 int main(int argc, char *argv[])
@@ -212,6 +247,7 @@ int main(int argc, char *argv[])
     struct option long_opts[] = {
         {"interface", required_argument, 0, 'i'},
         {"ip_list", required_argument, 0, 'l'},
+        {"log", 0, 0, 'L'},
     };
 
     if (lock_file_init("bsd")) {
@@ -219,13 +255,16 @@ int main(int argc, char *argv[])
         exit(-1);
     } 
 
-    while ((opt = getopt_long(argc, argv, "i:l:", long_opts, &opt_index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "i:l:L", long_opts, &opt_index)) != -1) {
         switch (opt) {
             case 'i':
                 ifn = optarg;
                 break;            
             case 'l':
                 ip_list = optarg;
+                break;
+            case 'L':
+                log_flag = 1;
                 break;
         }
     }
