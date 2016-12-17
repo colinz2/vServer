@@ -21,6 +21,11 @@ typedef struct vbs_instance
     uint32_t arp_count;
     uint32_t ping_count;
     uint32_t snmp_count;
+    uint8_t  cpu_rate;
+    uint32_t mem_total;
+    uint32_t mem_free;
+    uint32_t mem_cache;
+    uint32_t mem_buffer;
 } vbs_instance_t;
 
 struct vbs_instance_array

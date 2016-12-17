@@ -86,6 +86,11 @@ _ip_addr_add(char *str, struct vbs_instance_array *intances)
         snprintf(ip, sizeof(ip), "%d.%d.%d.%d", a, b, c, i);
         console_print("adding %s, stat = %d\n", ip, stat);
         vit.stat = stat;
+        vit.cpu_rate = i % 100;
+        vit.mem_total =  1024 + 128*256 + 64*256;
+        vit.mem_cache = a + b + c + 128*i;
+        vit.mem_buffer = a + b + c + 64*i;
+        vit.mem_free = vit.mem_total - vit.mem_cache - vit.mem_buffer;
         inet_pton(AF_INET, ip, &vit.ipaddr);
         addr_add(intances, &vit);
     }
@@ -120,12 +125,28 @@ cmd_input_hander(void *data)
         } else {
             vbs_inst = &intances->array[idx];
             int state = intances->array[idx].stat;
-            console_print(CONSOLE_BACK_N(1)"%-16s | arp:(%d) %-4s \tping:(%d)%-4s \tsnmp:(%d)%-4s\n", \
-                        p, 
-                        vbs_inst->arp_count,  IS_RESPOND_ARP(state)?"on":"off", 
-                        vbs_inst->ping_count, IS_RESPOND_PING(state)?"on":"off", 
-                        vbs_inst->snmp_count, IS_RESPOND_SNMP(state)?"on":"off"
-                        );
+            console_print(CONSOLE_BACK_N(1)"%-16s  | "
+                  "arp:(%d)%-5s "
+                  "ping:(%d)%-5s "
+                  "snmp:(%d)%-5s | "
+                  "cpu:%02d%%  "
+                  "memory(%02d%%):  "
+                  "total=%-8d  "
+                  "free=%-8d  "
+                  "cache=%-8d  "
+                  "buffer=%-8d"
+                  "\n", \
+                    p, 
+                    vbs_inst->arp_count, IS_RESPOND_ARP(state)?"on":"off",
+                    vbs_inst->ping_count, IS_RESPOND_PING(state)?"on":"off",
+                    vbs_inst->snmp_count, IS_RESPOND_SNMP(state)?"on":"off",
+                    vbs_inst->cpu_rate,
+                    (int)((float)vbs_inst->mem_free / vbs_inst->mem_total * 100),
+                    vbs_inst->mem_total,
+                    vbs_inst->mem_free,
+                    vbs_inst->mem_cache,
+                    vbs_inst->mem_buffer
+                    );
         }
     } else if (strncmp(buffer, "set", 3) == 0) {
         p = strtok(buffer+3, " ");

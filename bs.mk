@@ -14,6 +14,7 @@ PRJ_SRC = 	\
 	bs_utils.c \
 	bs_packet.c \
 	bs_vserver.c \
+	bs_snmp.c \
 	bs_main.c \
 	
 

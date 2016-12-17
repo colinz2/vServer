@@ -1,7 +1,3 @@
-#include "bs_utils.h"
-#include "bs_main.h"
-#include "bs_vserver.h"
-#include "bs_log.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -19,6 +15,12 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netpacket/packet.h>
+
+#include "bs_utils.h"
+#include "bs_main.h"
+#include "bs_vserver.h"
+#include "bs_log.h"
+#include "bs_snmp.h"
 
 typedef int (*cmp_fun)(const void *, const void *);
 
@@ -89,11 +91,27 @@ void addr_print(struct vbs_instance_array *a)
         vbs_inst = &a->array[i];
         int state = vbs_inst->stat;
         inet_ntop(AF_INET, &vbs_inst->ipaddr, ip, sizeof(ip));
-        console_print("#%-4d:  %-16s | arp:(%d)%-5s ping:(%d)%-5s snmp:(%d)%-5s\n", \
+        console_print("#%-4d:  %-16s | "
+                      "arp:(%d)%-5s "
+                      "ping:(%d)%-5s "
+                      "snmp:(%d)%-5s | "
+                      "cpu:%02d%%  "
+                      "memory(%02d%%):  "
+                      "total=%-8d  "
+                      "free=%-8d  "
+                      "cache=%-8d  "
+                      "buffer=%-8d"
+                      "\n", \
                         i + 1, ip, 
                         vbs_inst->arp_count, IS_RESPOND_ARP(state)?"on":"off",
                         vbs_inst->ping_count, IS_RESPOND_PING(state)?"on":"off",
-                        vbs_inst->snmp_count, IS_RESPOND_SNMP(state)?"on":"off"
+                        vbs_inst->snmp_count, IS_RESPOND_SNMP(state)?"on":"off",
+                        vbs_inst->cpu_rate,
+                        (int)((float)vbs_inst->mem_free / vbs_inst->mem_total * 100),
+                        vbs_inst->mem_total,
+                        vbs_inst->mem_free,
+                        vbs_inst->mem_cache,
+                        vbs_inst->mem_buffer
                         );
     }
     console_print("\n");
@@ -169,8 +187,9 @@ addr_add(struct vbs_instance_array *a, vbs_instance_t *i)
     if ((index = addr_binary_search(a, i->ipaddr)) >= 0) {
         return index;
     }
-    a->array[a->size].ipaddr = i->ipaddr;
-    a->array[a->size].stat = i->stat;
+    memcpy(&a->array[a->size], i, sizeof(vbs_instance_t));
+/*    a->array[a->size].ipaddr = i->ipaddr;
+    a->array[a->size].stat = i->stat;*/
     a->size++;
     addr_insert_sort(a);
     //addr_sort(a);
@@ -302,6 +321,7 @@ vsever_handler(void *data)
         unsigned char *BS_ptr = (unsigned char *)BufferSend;
         struct ether_header *ethd_s = NULL;
         unsigned char *rsp_payload = NULL;
+        int ret;
 
         if ((idx = addr_binary_search(bs_vsrv->vbsa, tip)) >= 0) {
             vbs_instance_t * vbs_inst = &bs_vsrv->vbsa->array[idx];
@@ -322,9 +342,14 @@ vsever_handler(void *data)
                     vbs_inst->ping_count++;
                 } else if (protocl_type & proto_snmp){
                     rsp_payload = BS_ptr + ether_header_len;
-                    pack_respond_udp(ether_payload, rsp_payload, 0);
-                    BS_ptr += PSDH_SIZE;
-                    vbs_inst->snmp_count++;
+                    ret = disp_bs_snmp(ether_payload + IP_H_SIZE + UDP_H_SIZE, rsp_payload + IP_H_SIZE + UDP_H_SIZE + PSDH_SIZE, vbs_inst);
+                    if (ret == 0) {
+                        pack_respond_udp(ether_payload, rsp_payload, 0);
+                        BS_ptr += PSDH_SIZE;
+                        vbs_inst->snmp_count++;
+                    } else {
+                        return 0;
+                    }
                 } else {
                     return 0;
                 }
