@@ -87,15 +87,25 @@ _ip_addr_add(char *str, struct vbs_instance_array *intances)
         console_print("adding %s, stat = %d\n", ip, stat);
         vit.stat = stat;
         vit.cpu_rate = i % 100;
-        vit.mem_total =  1024 + 128*256 + 64*256;
+        vit.mem_total =  4096 + 256*256 + 64*256;
         vit.mem_cache = a + b + c + 128*i;
         vit.mem_buffer = a + b + c + 64*i;
-        vit.mem_free = vit.mem_total - vit.mem_cache - vit.mem_buffer;
+        vit.mem_free = a + b + c + 128*i;
         inet_pton(AF_INET, ip, &vit.ipaddr);
         addr_add(intances, &vit);
     }
 
     return 0;
+}
+
+void help()
+{
+    console_print("command: \n");
+    console_print("get ip_address [get back server parameter and statstics] \n"
+                  "add ip_address parameter [add back server] \n"
+                  "showall [show all back server] \n"
+                  "clear [clear screen] \n"
+                  "exit [exit program] \n\n");
 }
 
 int 
@@ -112,47 +122,29 @@ cmd_input_hander(void *data)
     if (buff_len > sizeof(buffer)) buff_len = sizeof(buffer);
 
     len = read(STDIN_FILENO, buffer, buff_len);
-    if (len <= 3) return 0;
+    if (len <= 3) {
+        console_print("$");
+        return 0;
+    }
     buffer[len - 1] = 0;
     
     if (strncmp(buffer, "get", 3) == 0) {
         p = strtok(buffer+3, " ");
-        if (p == NULL) return 0;
+        if (p == NULL) { console_print("$"); return 0;}
 
         idx = addr_search(intances, p);
         if (idx < 0) {
             console_print("Can not find %s , idx = %d\n", p, idx);
         } else {
             vbs_inst = &intances->array[idx];
-            int state = intances->array[idx].stat;
-            console_print(CONSOLE_BACK_N(1)"%-16s  | "
-                  "arp:(%d)%-5s "
-                  "ping:(%d)%-5s "
-                  "snmp:(%d)%-5s | "
-                  "cpu:%02d%%  "
-                  "memory(%02d%%):  "
-                  "total=%-8d  "
-                  "free=%-8d  "
-                  "cache=%-8d  "
-                  "buffer=%-8d"
-                  "\n", \
-                    p, 
-                    vbs_inst->arp_count, IS_RESPOND_ARP(state)?"on":"off",
-                    vbs_inst->ping_count, IS_RESPOND_PING(state)?"on":"off",
-                    vbs_inst->snmp_count, IS_RESPOND_SNMP(state)?"on":"off",
-                    vbs_inst->cpu_rate,
-                    (int)((float)vbs_inst->mem_free / vbs_inst->mem_total * 100),
-                    vbs_inst->mem_total,
-                    vbs_inst->mem_free,
-                    vbs_inst->mem_cache,
-                    vbs_inst->mem_buffer
-                    );
+            console_print(CONSOLE_BACK_N(1));
+            instance_print(vbs_inst, 1);
         }
     } else if (strncmp(buffer, "set", 3) == 0) {
         p = strtok(buffer+3, " ");
-        if (p == NULL) return 0;
+        if (p == NULL) {console_print("$"); return 0;}
         char *para = strtok(NULL, " ");
-        if (para == NULL) return 0;
+        if (para == NULL) {console_print("$"); return 0;}
         idx = addr_search(intances, p);
         if (idx < 0) {
             console_print("Can not find %s , idx = %d\n", p, idx);
@@ -171,6 +163,8 @@ cmd_input_hander(void *data)
                 if (para == NULL)break;
             }
             vbs_inst->stat = stat;
+            console_print(CONSOLE_BACK_N(1));
+            instance_print(vbs_inst, 1);
         }
     } else if (strncmp(buffer, "add", 3) == 0) {
         p = skip_space(buffer+3);
@@ -185,12 +179,7 @@ cmd_input_hander(void *data)
     }
      else if (strncmp(buffer, "help", 4) == 0) {
         console_print(CONSOLE_CLEAR);
-        console_print("command: \n");
-        console_print("get ip_address [get back server parameter and statstics] \n"
-                      "add ip_address parameter [add back server] \n"
-                      "showall [show all back server] \n"
-                      "clear [clear screen] \n"
-                      "exit [exit program] \n");
+        help();
     }  else if (strncmp(buffer, "exit", 4) == 0) {
         exit(0);
     } else if (strncmp(buffer, "quit", 4) == 0) {
@@ -198,9 +187,18 @@ cmd_input_hander(void *data)
     } else {
         console_print(CONSOLE_CLEAR);
     }
+
+    console_print("$");
     return 0;
 }
 
+void printf_banner(void)
+{
+    console_print(CONSOLE_CLEAR);
+    console_print("Welcome backup server agent command line!\n");
+    help();
+    console_print("$");
+}
 
 dev_event_t * 
 bs_cmd_creat(void *data)
@@ -208,6 +206,7 @@ bs_cmd_creat(void *data)
     dev_event_t* vs;
     //set_nonblocking(STDIN_FILENO);
     vs = dev_event_creat(STDIN_FILENO, EPOLLIN, cmd_input_hander, (void *)data, 0);
+    printf_banner();
     return vs;
 }
 

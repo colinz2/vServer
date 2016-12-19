@@ -54,6 +54,7 @@ typedef struct _bs_vserver
 dev_event_t * bs_vserver_creat(void *data);
 void bs_vserver_free(dev_event_t *ev);
 
+void instance_print(vbs_instance_t *vbs_inst, int i);
 
 void addr_print(struct vbs_instance_array *a);
 int addr_search(struct vbs_instance_array *a, const char *ip);

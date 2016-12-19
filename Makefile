@@ -11,3 +11,4 @@ install:
 
 clean:
 	make -f $(SRC_DIR)/bs.mk clean
+	rm -f bs_gen_ip_list

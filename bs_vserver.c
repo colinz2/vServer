@@ -80,39 +80,45 @@ int addr_search(struct vbs_instance_array *a, const char *ip)
     return addr_binary_search(a, iip);
 }
 
+void instance_print(vbs_instance_t *vbs_inst, int i)
+{
+    char ip[32] = {0};
+    int state = vbs_inst->stat;
+    int used = vbs_inst->mem_total - vbs_inst->mem_free - vbs_inst->mem_free - vbs_inst->mem_buffer;
+    inet_ntop(AF_INET, &vbs_inst->ipaddr, ip, sizeof(ip));
+    console_print("#%-4d:  %-16s | "
+                  "arp:(%d)%-5s "
+                  "ping:(%d)%-5s "
+                  "snmp:(%d)%-5s | "
+                  "cpu:%02d%%  "
+                  "memory(%02d%%):  "
+                  "total=%-8d  "
+                  "free=%-8d  "
+                  "cache=%-8d  "
+                  "buffer=%-8d"
+                  "\n", \
+                    i, ip, 
+                    vbs_inst->arp_count, IS_RESPOND_ARP(state)?"on":"off",
+                    vbs_inst->ping_count, IS_RESPOND_PING(state)?"on":"off",
+                    vbs_inst->snmp_count, IS_RESPOND_SNMP(state)?"on":"off",
+                    vbs_inst->cpu_rate,
+                    (int)((float)used / vbs_inst->mem_total * 100),
+                    vbs_inst->mem_total,
+                    vbs_inst->mem_free,
+                    vbs_inst->mem_cache,
+                    vbs_inst->mem_buffer
+                    );
+}
+
 void addr_print(struct vbs_instance_array *a)
 {
     int i;
-    char ip[32] = {0};
     vbs_instance_t *vbs_inst;
 
-    console_print(CONSOLE_CLEAR"Ip address number = %d \n", a->size);
+    console_print("Ip address number = %d \n", a->size);
     for (i = 0; i < a->size; i++) {
         vbs_inst = &a->array[i];
-        int state = vbs_inst->stat;
-        inet_ntop(AF_INET, &vbs_inst->ipaddr, ip, sizeof(ip));
-        console_print("#%-4d:  %-16s | "
-                      "arp:(%d)%-5s "
-                      "ping:(%d)%-5s "
-                      "snmp:(%d)%-5s | "
-                      "cpu:%02d%%  "
-                      "memory(%02d%%):  "
-                      "total=%-8d  "
-                      "free=%-8d  "
-                      "cache=%-8d  "
-                      "buffer=%-8d"
-                      "\n", \
-                        i + 1, ip, 
-                        vbs_inst->arp_count, IS_RESPOND_ARP(state)?"on":"off",
-                        vbs_inst->ping_count, IS_RESPOND_PING(state)?"on":"off",
-                        vbs_inst->snmp_count, IS_RESPOND_SNMP(state)?"on":"off",
-                        vbs_inst->cpu_rate,
-                        (int)((float)vbs_inst->mem_free / vbs_inst->mem_total * 100),
-                        vbs_inst->mem_total,
-                        vbs_inst->mem_free,
-                        vbs_inst->mem_cache,
-                        vbs_inst->mem_buffer
-                        );
+        instance_print(vbs_inst, i + 1);
     }
     console_print("\n");
 }
@@ -342,12 +348,14 @@ vsever_handler(void *data)
                     vbs_inst->ping_count++;
                 } else if (protocl_type & proto_snmp){
                     rsp_payload = BS_ptr + ether_header_len;
-                    ret = disp_bs_snmp(ether_payload + IP_H_SIZE + UDP_H_SIZE, rsp_payload + IP_H_SIZE + UDP_H_SIZE + PSDH_SIZE, vbs_inst);
-                    if (ret == 0) {
-                        pack_respond_udp(ether_payload, rsp_payload, 0);
+                    unsigned char *snmp_payload = rsp_payload + IP_H_SIZE + UDP_H_SIZE + PSDH_SIZE;
+                    ret = disp_bs_snmp(ether_payload + IP_H_SIZE + UDP_H_SIZE, snmp_payload, vbs_inst);
+                    if (ret > 0) {
+                        send_len = pack_respond_udp(ether_payload, rsp_payload, ret);
                         BS_ptr += PSDH_SIZE;
                         vbs_inst->snmp_count++;
                     } else {
+                        printf("ret = %d \n", ret);
                         return 0;
                     }
                 } else {

@@ -18,7 +18,7 @@ typedef struct snmp_head
     unsigned char version_value;
     unsigned char community_tag;
     unsigned char community_len;
-    unsigned char community_value[1];  /*variable field*/
+    unsigned char community_value[6];  /*variable field*/
 } snmp_head_t;
 
     
@@ -35,6 +35,10 @@ typedef struct snmp_pdu
     unsigned char error_index_tag;
     unsigned char error_index_len;
     unsigned char error_index_value;
+    unsigned char item_tag1;
+    unsigned char item_len1;    
+    unsigned char item_tag2;
+    unsigned char item_len2;
     unsigned char oid_tag;
     unsigned char oid_len;
     unsigned char oid_value[10];           /*variable field*/
@@ -70,40 +74,51 @@ disp_bs_snmp(unsigned char *snmp_req, unsigned char *snmp_rsp, vbs_instance_t * 
     uint32_t value;
 
     if (snmp_req_pdu->pdu_type != SNMP_GET_REQUEST) {
+        printf("pdu_type = %02x \n", snmp_req_pdu->pdu_type);
         return -1;
     }
 
     if (memcmp(req_oid, cpu_rate_oid, 10) == 0) {
+        snmp_rsp_tlv->tag = 0x02;
         snmp_rsp_tlv->len = 1;
         snmp_rsp_tlv->value[0] = vbs_inst->cpu_rate; 
     } else if (memcmp(req_oid, total_memory_oid, 10) == 0) {
+        snmp_rsp_tlv->tag = 0x02;
         snmp_rsp_tlv->len = 4;
         value = htonl(vbs_inst->mem_total);
         memcpy(snmp_rsp_tlv->value, (const void *)&value, 4);
     } else if (memcmp(req_oid, free_memory_oid, 10) == 0) {
+        snmp_rsp_tlv->tag = 0x02;
         snmp_rsp_tlv->len = 4;
         value = htonl(vbs_inst->mem_free);
         memcpy(snmp_rsp_tlv->value, (const void *)&value, 4);
         
     } else if (memcmp(req_oid, buffer_memory_oid, 10) == 0) {
+        snmp_rsp_tlv->tag = 0x02;
         snmp_rsp_tlv->len = 4;
         value = htonl(vbs_inst->mem_buffer);
         memcpy(snmp_rsp_tlv->value, (const void *)&value, 4);
 
     } else if (memcmp(req_oid, cache_memory_oid, 10) == 0) {
+        snmp_rsp_tlv->tag = 0x02;
         snmp_rsp_tlv->len = 4;
         value = htonl(vbs_inst->mem_cache);
         memcpy(snmp_rsp_tlv->value, (const void *)&value, 4);
 
     } else {
+        printf("other oid \n");
+        printf("req_oid: %02x %02x\n", req_oid[0], req_oid[1]); 
         return -1;
     }
 
     memcpy(snmp_rsp_head, snmp_req_head, sizeof(snmp_head_t));
     memcpy(snmp_rsp_pdu, snmp_req_pdu, sizeof(snmp_pdu_t));
 
+    snmp_rsp_pdu->item_len1 += snmp_rsp_tlv->len;  
+    snmp_rsp_pdu->item_len2 += snmp_rsp_tlv->len;  
+
     snmp_rsp_pdu->pdu_type = SNMP_GET_RESPONSE;
     snmp_rsp_pdu->pdu_len = sizeof(snmp_pdu_t) + snmp_rsp_tlv->len;
-    snmp_rsp_head->pkt_len = len + snmp_rsp_tlv->len;
-    return 0;
+    snmp_rsp_head->pkt_len = len + snmp_rsp_tlv->len - 2;
+    return len + snmp_rsp_tlv->len;
 }
