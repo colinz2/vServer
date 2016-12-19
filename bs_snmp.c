@@ -9,6 +9,22 @@
 #define SNMP_SET_REQUEST        0xA3
 #define SNMP_TRAP               0xA4
 
+//https://en.wikipedia.org/wiki/X.690#BER_encoding
+#define BER_BOOL        0x01
+#define BER_INT         0x02
+#define BER_OCTSTR      0x04
+#define BER_NULL        0x05
+#define BER_OBJID       0x06
+#define BER_ENUM        0x0A
+#define BER_SEQ         0x30
+#define BER_SETOF       0x31
+#define BER_IPADDR      0x40
+#define BER_COUNTER     0x41
+#define BER_GAUGE       0x42
+#define BER_TIMETICKS   0x43
+#define BER_OPAQUE      0x44
+
+
 typedef struct snmp_head
 {
     unsigned char pkt_flag;
@@ -79,28 +95,28 @@ disp_bs_snmp(unsigned char *snmp_req, unsigned char *snmp_rsp, vbs_instance_t * 
     }
 
     if (memcmp(req_oid, cpu_rate_oid, 10) == 0) {
-        snmp_rsp_tlv->tag = 0x02;
+        snmp_rsp_tlv->tag = BER_INT;
         snmp_rsp_tlv->len = 1;
         snmp_rsp_tlv->value[0] = vbs_inst->cpu_rate; 
     } else if (memcmp(req_oid, total_memory_oid, 10) == 0) {
-        snmp_rsp_tlv->tag = 0x02;
+        snmp_rsp_tlv->tag = BER_INT;
         snmp_rsp_tlv->len = 4;
         value = htonl(vbs_inst->mem_total);
         memcpy(snmp_rsp_tlv->value, (const void *)&value, 4);
     } else if (memcmp(req_oid, free_memory_oid, 10) == 0) {
-        snmp_rsp_tlv->tag = 0x02;
+        snmp_rsp_tlv->tag = BER_INT;
         snmp_rsp_tlv->len = 4;
         value = htonl(vbs_inst->mem_free);
         memcpy(snmp_rsp_tlv->value, (const void *)&value, 4);
         
     } else if (memcmp(req_oid, buffer_memory_oid, 10) == 0) {
-        snmp_rsp_tlv->tag = 0x02;
+        snmp_rsp_tlv->tag = BER_INT;
         snmp_rsp_tlv->len = 4;
         value = htonl(vbs_inst->mem_buffer);
         memcpy(snmp_rsp_tlv->value, (const void *)&value, 4);
 
     } else if (memcmp(req_oid, cache_memory_oid, 10) == 0) {
-        snmp_rsp_tlv->tag = 0x02;
+        snmp_rsp_tlv->tag = BER_INT;
         snmp_rsp_tlv->len = 4;
         value = htonl(vbs_inst->mem_cache);
         memcpy(snmp_rsp_tlv->value, (const void *)&value, 4);
