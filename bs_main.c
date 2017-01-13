@@ -98,6 +98,7 @@ _ip_addr_add(char *str, struct vbs_instance_array *intances)
     return 0;
 }
 
+
 void help()
 {
     console_print("command: \n");
@@ -192,10 +193,16 @@ cmd_input_hander(void *data)
     return 0;
 }
 
+#define WELCOME_STR \
+"####################################################################\n"\
+"#      Back sever agent:  V1.0.1 , 2016.12.30                      #\n"\
+"#------------------------------------------------------------------#\n"\
+"#      Welcome! Start to use the command line!                     #\n"\
+"####################################################################\n"
 void printf_banner(void)
 {
     console_print(CONSOLE_CLEAR);
-    console_print("Welcome backup server agent command line!\n");
+    console_print("%s", WELCOME_STR);
     help();
     console_print("$");
 }
