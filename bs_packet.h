@@ -35,7 +35,7 @@ struct pseudo_header
     int8_t zero;
     int8_t protocol;
     int16_t seg_len;
-} __attribute__((__packed__));
+};
 
 int
 pack_respond_arp(unsigned char *rev, unsigned char *rsp, int uplen_);

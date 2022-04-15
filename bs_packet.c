@@ -19,9 +19,9 @@ print_hex(unsigned char *hex, int len) {
     fflush(stdout);
 }
 
-unsigned short in_cksum(unsigned short *addr, int len)
+unsigned short in_cksum(unsigned short *addr, size_t len)
 {
-    int nleft = len;
+    size_t nleft = len;
     int sum = 0;
     unsigned short *w = addr;
     unsigned short answer = 0;
